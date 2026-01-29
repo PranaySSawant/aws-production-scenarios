@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AWS Production Scenario Engine</title>
+  <style>
+    body { font-family: Arial, sans-serif; background:#0f172a; color:#e5e7eb; padding:20px }
+    .card { background:#020617; padding:20px; border-radius:10px; max-width:900px; margin:auto }
+    h1,h2 { color:#38bdf8 }
+    button { padding:10px 16px; background:#38bdf8; border:none; border-radius:6px; font-weight:bold; cursor:pointer }
+    .tag { display:inline-block; background:#1e293b; padding:4px 8px; border-radius:4px; margin-right:6px; margin-top:6px }
+    ul { margin-left:20px }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🔥 AWS Production Scenario Generator</h1>
+    <p>Real-life production incidents for SRE / DevOps / Cloud Security practice</p>
+    <button onclick="generateScenario()">Generate New Incident</button>
+
+    <hr />
+
+    <h2 id="service"></h2>
+    <div id="context"></div>
+
+    <h3>🚨 Symptoms</h3>
+    <ul id="symptoms"></ul>
+
+    <h3>❓ Practice Questions</h3>
+    <ul id="questions"></ul>
+  </div>
+
+<script>
+const services = {
+  "EC2": {
+    failures: ["Capacity exhaustion", "Security Group misconfiguration", "Disk IO saturation", "Instance metadata access blocked"],
+    symptoms: ["Instances unreachable", "High CPU wait", "Connection timeouts", "Auto Scaling not triggering"]
+  },
+  "RDS": {
+    failures: ["Connection exhaustion", "Failover stuck", "Slow queries", "Storage full"],
+    symptoms: ["Application latency", "DB connections maxed", "Read replica lag", "Unexpected reboot"]
+  },
+  "S3": {
+    failures: ["Public access misconfiguration", "KMS permission denied", "Request throttling", "Replication failure"],
+    symptoms: ["403 errors", "AccessDenied", "High 4xx rate", "Objects not syncing"]
+  },
+  "VPC": {
+    failures: ["Route table misconfiguration", "NACL blocking traffic", "NAT gateway failure", "CIDR overlap"],
+    symptoms: ["No outbound internet", "Intermittent packet loss", "Cross-AZ traffic failing"]
+  },
+  "IAM": {
+    failures: ["Over-permissive role", "Missing permissions", "STS trust broken", "Access key leaked"],
+    symptoms: ["AccessDenied errors", "Unexpected access", "Service failures after deploy"]
+  }
+};
+
+const environments = ["Production", "Staging"];
+const traffic = ["Peak traffic", "Normal load", "Post-deployment"];
+
+const baseQuestions = [
+  "What is the first metric or log you check and why?",
+  "How do you confirm the blast radius?",
+  "What is the safest immediate mitigation?",
+  "What action should you avoid right now?",
+  "Is there a possible IAM or security angle?",
+  "Which alert should have detected this earlier?",
+  "What long-term fix prevents recurrence?"
+];
+
+function randomFrom(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function generateScenario() {
+  const serviceName = randomFrom(Object.keys(services));
+  const service = services[serviceName];
+
+  document.getElementById("service").innerText = `Service: ${serviceName}`;
+  document.getElementById("context").innerHTML = `
+    <span class='tag'>${randomFrom(environments)}</span>
+    <span class='tag'>${randomFrom(traffic)}</span>
+    <span class='tag'>Failure: ${randomFrom(service.failures)}</span>
+  `;
+
+  const symptomsEl = document.getElementById("symptoms");
+  symptomsEl.innerHTML = "";
+  symptomsEl.appendChild(Object.assign(document.createElement("li"), { innerText: randomFrom(service.symptoms) }));
+
+  const questionsEl = document.getElementById("questions");
+  questionsEl.innerHTML = "";
+  baseQuestions.forEach(q => {
+    questionsEl.appendChild(Object.assign(document.createElement("li"), { innerText: q }));
+  });
+}
+
+// auto-generate on load
+generateScenario();
+</script>
+</body>
+</html>
