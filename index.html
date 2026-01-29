@@ -6,18 +6,37 @@
   <title>AWS Production Scenario Engine</title>
   <style>
     body { font-family: Arial, sans-serif; background:#0f172a; color:#e5e7eb; padding:20px }
-    .card { background:#020617; padding:20px; border-radius:10px; max-width:900px; margin:auto }
-    h1,h2 { color:#38bdf8 }
-    button { padding:10px 16px; background:#38bdf8; border:none; border-radius:6px; font-weight:bold; cursor:pointer }
+    .card { background:#020617; padding:20px; border-radius:10px; max-width:1000px; margin:auto }
+    h1,h2,h3 { color:#38bdf8 }
+    button, select { padding:8px 12px; background:#38bdf8; border:none; border-radius:6px; font-weight:bold; cursor:pointer; margin-right:6px }
     .tag { display:inline-block; background:#1e293b; padding:4px 8px; border-radius:4px; margin-right:6px; margin-top:6px }
     ul { margin-left:20px }
+    .mode { margin:10px 0 }
   </style>
 </head>
 <body>
   <div class="card">
     <h1>🔥 AWS Production Scenario Generator</h1>
-    <p>Real-life production incidents for SRE / DevOps / Cloud Security practice</p>
-    <button onclick="generateScenario()">Generate New Incident</button>
+    <p>Automated real-life incidents for SRE / DevOps / Cloud Security</p>
+
+    <div class="mode">
+      <label>Difficulty:</label>
+      <select id="difficulty">
+        <option value="L1">L1 - Basic</option>
+        <option value="L2">L2 - Intermediate</option>
+        <option value="L3">L3 - Advanced</option>
+        <option value="L4">L4 - Critical</option>
+      </select>
+
+      <label>Mode:</label>
+      <select id="mode">
+        <option value="normal">Normal</option>
+        <option value="security">Security Only</option>
+        <option value="interview">Interview Mode</option>
+      </select>
+
+      <button onclick="generateScenario()">Generate New Incident</button>
+    </div>
 
     <hr />
 
@@ -29,72 +48,125 @@
 
     <h3>❓ Practice Questions</h3>
     <ul id="questions"></ul>
+
+    <h3>🔁 Cascading Failure (Think Ahead)</h3>
+    <p id="cascade"></p>
+
+    <h3>🧠 Self-Evaluation Rubric</h3>
+    <ul>
+      <li><b>Junior:</b> Jumps to fixes without confirming impact</li>
+      <li><b>Mid:</b> Checks metrics/logs but reacts late</li>
+      <li><b>Senior:</b> Confirms blast radius, mitigates safely</li>
+      <li><b>Staff:</b> Thinks prevention, automation, cost & security</li>
+    </ul>
   </div>
 
 <script>
+const questionBank = {
+  networking: [
+    "Which network metric or log do you check first?",
+    "How do you isolate subnet vs route vs gateway issues?",
+    "What change restores connectivity with least risk?",
+    "What network change would you avoid right now?",
+    "How do you confirm this is not AZ-wide?"
+  ],
+  security: [
+    "Which IAM or resource policy could cause this?",
+    "How do you confirm this is not an active attack?",
+    "What log proves authorization vs misconfiguration?",
+    "What containment step limits blast radius?",
+    "Which security alert should have fired?"
+  ],
+  scaling: [
+    "Which metric confirms capacity exhaustion?",
+    "How do you scale without instability?",
+    "What is the fastest safe mitigation?",
+    "What scaling action could worsen the issue?",
+    "How do you prevent this during peak load?"
+  ],
+  cost: [
+    "Which cost metric would spike due to this?",
+    "How do you stop cost bleed immediately?",
+    "Which budget or alert should exist?",
+    "How do you confirm this is not misuse?",
+    "What governance control prevents recurrence?"
+  ]
+};
+
 const services = {
+  "VPC": {
+    failures: [
+      { name: "NAT Gateway failure", domain: "networking" },
+      { name: "Route table misconfiguration", domain: "networking" },
+      { name: "NACL blocking traffic", domain: "security" }
+    ],
+    symptoms: ["Intermittent packet loss", "No outbound internet", "Cross-AZ traffic failing"]
+  },
   "EC2": {
-    failures: ["Capacity exhaustion", "Security Group misconfiguration", "Disk IO saturation", "Instance metadata access blocked"],
-    symptoms: ["Instances unreachable", "High CPU wait", "Connection timeouts", "Auto Scaling not triggering"]
+    failures: [
+      { name: "CPU saturation", domain: "scaling" },
+      { name: "Security group misconfiguration", domain: "security" },
+      { name: "EBS IO throttling", domain: "cost" }
+    ],
+    symptoms: ["Instance unresponsive", "High load average", "Application timeouts"]
   },
   "RDS": {
-    failures: ["Connection exhaustion", "Failover stuck", "Slow queries", "Storage full"],
-    symptoms: ["Application latency", "DB connections maxed", "Read replica lag", "Unexpected reboot"]
-  },
-  "S3": {
-    failures: ["Public access misconfiguration", "KMS permission denied", "Request throttling", "Replication failure"],
-    symptoms: ["403 errors", "AccessDenied", "High 4xx rate", "Objects not syncing"]
-  },
-  "VPC": {
-    failures: ["Route table misconfiguration", "NACL blocking traffic", "NAT gateway failure", "CIDR overlap"],
-    symptoms: ["No outbound internet", "Intermittent packet loss", "Cross-AZ traffic failing"]
-  },
-  "IAM": {
-    failures: ["Over-permissive role", "Missing permissions", "STS trust broken", "Access key leaked"],
-    symptoms: ["AccessDenied errors", "Unexpected access", "Service failures after deploy"]
+    failures: [
+      { name: "Connection exhaustion", domain: "scaling" },
+      { name: "IAM auth failure", domain: "security" },
+      { name: "Storage full", domain: "cost" }
+    ],
+    symptoms: ["DB connections maxed", "App latency", "Failover delays"]
   }
 };
 
 const environments = ["Production", "Staging"];
 const traffic = ["Peak traffic", "Normal load", "Post-deployment"];
 
-const baseQuestions = [
-  "What is the first metric or log you check and why?",
-  "How do you confirm the blast radius?",
-  "What is the safest immediate mitigation?",
-  "What action should you avoid right now?",
-  "Is there a possible IAM or security angle?",
-  "Which alert should have detected this earlier?",
-  "What long-term fix prevents recurrence?"
-];
-
 function randomFrom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
 function generateScenario() {
+  const mode = document.getElementById("mode").value;
+  const difficulty = document.getElementById("difficulty").value;
+
   const serviceName = randomFrom(Object.keys(services));
   const service = services[serviceName];
+  const failure = randomFrom(service.failures);
 
-  document.getElementById("service").innerText = `Service: ${serviceName}`;
+  if (mode === "security" && failure.domain !== "security") return generateScenario();
+
+  document.getElementById("service").innerText = `Service: ${serviceName} (${difficulty})`;
   document.getElementById("context").innerHTML = `
     <span class='tag'>${randomFrom(environments)}</span>
     <span class='tag'>${randomFrom(traffic)}</span>
-    <span class='tag'>Failure: ${randomFrom(service.failures)}</span>
+    <span class='tag'>Failure: ${failure.name}</span>
   `;
 
   const symptomsEl = document.getElementById("symptoms");
   symptomsEl.innerHTML = "";
   symptomsEl.appendChild(Object.assign(document.createElement("li"), { innerText: randomFrom(service.symptoms) }));
 
+  const domainQuestions = questionBank[failure.domain];
+  const selectedQuestions = domainQuestions.sort(() => 0.5 - Math.random()).slice(0, difficulty === 'L4' ? 5 : 3);
+
   const questionsEl = document.getElementById("questions");
   questionsEl.innerHTML = "";
-  baseQuestions.forEach(q => {
+  selectedQuestions.forEach(q => {
     questionsEl.appendChild(Object.assign(document.createElement("li"), { innerText: q }));
   });
+
+  document.getElementById("cascade").innerText =
+    difficulty === 'L4'
+      ? 'This failure may cascade into IAM throttling, downstream service timeouts, or cost spikes.'
+      : 'If unresolved, another dependent service may start failing.';
+
+  if (mode === "interview") {
+    alert("Interview Mode: Explain your thinking OUT LOUD before scrolling or refreshing.");
+  }
 }
 
-// auto-generate on load
 generateScenario();
 </script>
 </body>
